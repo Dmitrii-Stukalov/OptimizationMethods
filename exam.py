@@ -141,11 +141,6 @@ def test(A, max_k=15):
     A = CSRMatrix(A)
     x = [i + 1 for i in range(A.N)]
     for k in range(max_k):
-        F = []
-        for i in range(A.N):
-            F.append(sum([A.to_matrix()[i][j] * x[j] for j in range(A.N)]))
-        x_solve = A.lu_solve(F)
-
         A_noise = A.add_noise(k)
         F = []
         for i in range(A.N):
@@ -153,13 +148,12 @@ def test(A, max_k=15):
         x_noise = A.lu_solve(F)
 
         print('Expected:', x)
-        print('Solved:', x_solve)
-        print('With noise:', x_noise)
-        diff = [x_solve[i] - x_noise[i] for i in range(len(x_solve))]
-        print('Error', norm(diff) / norm(x_solve), 'k =', k)
+        print('Solved:', x_noise)
+        diff = [x[i] - x_noise[i] for i in range(len(x))]
+        print('Error', norm(diff) / norm(x), 'k =', k)
 
 
-def test2(max_k=20):
+def test2(max_k=15):
     for k in range(1, max_k):
         A = [[1 for _ in range(k)] for _ in range(k)]
         for i in range(k):
@@ -188,25 +182,25 @@ def zero(k):
     return CSRMatrix([[0 for _ in range(k)] for _ in range(k)])
 
 
-def block_lu(old_A, delimiter_row, delimiter_column):
+def block_lu(old_A, block_size):
     old_A = old_A.to_matrix()
     n = len(old_A)
-    X = [[0 for _ in range(delimiter_column)] for _ in range(delimiter_row)]
-    Y = [[0 for _ in range(n - delimiter_column)] for _ in range(delimiter_row)]
-    Z = [[0 for _ in range(delimiter_column)] for _ in range(n - delimiter_row)]
-    W = [[0 for _ in range(n - delimiter_column)] for _ in range(n - delimiter_row)]
+    X = [[0 for _ in range(block_size)] for _ in range(block_size)]
+    Y = [[0 for _ in range(n - block_size)] for _ in range(block_size)]
+    Z = [[0 for _ in range(block_size)] for _ in range(n - block_size)]
+    W = [[0 for _ in range(n - block_size)] for _ in range(n - block_size)]
     for i in range(n):
         for j in range(n):
-            if i < delimiter_row:
-                if j < delimiter_column:
+            if i < block_size:
+                if j < block_size:
                     X[i][j] = old_A[i][j]
                 else:
-                    Y[i][j - delimiter_column] = old_A[i][j]
+                    Y[i][j - block_size] = old_A[i][j]
             else:
-                if j < delimiter_column:
-                    Z[i - delimiter_row][j] = old_A[i][j]
+                if j < block_size:
+                    Z[i - block_size][j] = old_A[i][j]
                 else:
-                    W[i - delimiter_row][j - delimiter_column] = old_A[i][j]
+                    W[i - block_size][j - block_size] = old_A[i][j]
     X = CSRMatrix(X)
     Y = CSRMatrix(Y)
     Z = CSRMatrix(Z)
@@ -225,26 +219,30 @@ def block_lu(old_A, delimiter_row, delimiter_column):
 
     for i in range(n):
         for j in range(n):
-            if i < delimiter_row:
-                if j < delimiter_column:
+            if i < block_size:
+                if j < block_size:
                     L[i][j] = L11.to_matrix()[i][j]
                     U[i][j] = U11.to_matrix()[i][j]
                 else:
-                    L[i][j] = L12.to_matrix()[i][j - delimiter_column]
-                    U[i][j] = U12.to_matrix()[i][j - delimiter_column]
+                    L[i][j] = L12.to_matrix()[i][j - block_size]
+                    U[i][j] = U12.to_matrix()[i][j - block_size]
             else:
-                if j < delimiter_column:
-                    L[i][j] = L21.to_matrix()[i - delimiter_row][j]
-                    U[i][j] = U21.to_matrix()[i - delimiter_row][j]
+                if j < block_size:
+                    L[i][j] = L21.to_matrix()[i - block_size][j]
+                    U[i][j] = U21.to_matrix()[i - block_size][j]
                 else:
-                    L[i][j] = L22.to_matrix()[i - delimiter_row][j - delimiter_column]
-                    U[i][j] = U22.to_matrix()[i - delimiter_row][j - delimiter_column]
+                    L[i][j] = L22.to_matrix()[i - block_size][j - block_size]
+                    U[i][j] = U22.to_matrix()[i - block_size][j - block_size]
 
     return CSRMatrix(L), CSRMatrix(U)
 
 
 def generate_test_matrix(k):
     return CSRMatrix([[randint(-10, 10) for _ in range(k)] for _ in range(k)])
+
+
+def generate_special_test_matrix(k):
+    return CSRMatrix([[randint(-4, 0) for _ in range(k)] for _ in range(k)])
 
 
 A = [[9, 0, 0, 3, 1, 0, 1],
@@ -255,14 +253,14 @@ A = [[9, 0, 0, 3, 1, 0, 1],
      [0, 0, 0, 0, 0, 8, 0],
      [2, 2, 0, 0, 3, 0, 8]]
 
-B = CSRMatrix(A)
+A = CSRMatrix(A)
 
-L, U = B.lu()
+L, U = A.lu()
 L.dot(U).show(as_matrix=True)
 print()
 
-B_inv = B.inverse()
-B_inv.dot(B).show(as_matrix=True)
+A_inv = A.inverse()
+A_inv.dot(A).show(as_matrix=True)
 print()
 
 A = [[1, 2, 3],
@@ -272,21 +270,21 @@ b = [6, 9, -6]
 analytic_ans = [-2, 1, 2]
 
 A = CSRMatrix(A)
-print(analytic_ans)
-print(A.lu_solve(b))
+print('Analytical answer:', analytic_ans)
+print('Solved:', A.lu_solve(b))
+print()
 
-A = [[1, 2, 3],
-     [4, 5, 6],
-     [7, 8, 0]]
-A = CSRMatrix(A)
+A = generate_special_test_matrix(4)
 test(A)
 test2()
 
-for k in range(1, 10):
+for k in range(1, 8):
     A = generate_test_matrix(2 * k)
     A.show(as_matrix=True)
     print()
-    L, U = block_lu(A, k, k)
+    block_size = randint(1, 2 * k)
+    print('Block size:', block_size)
+    L, U = block_lu(A, k)
     L.show(as_matrix=True)
     print()
     U.show(as_matrix=True)
